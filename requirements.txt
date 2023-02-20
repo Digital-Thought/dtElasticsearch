@@ -1,0 +1,5 @@
+# pythonLibs Requirements
+requests
+setuptools
+elasticsearch
+urllib3
