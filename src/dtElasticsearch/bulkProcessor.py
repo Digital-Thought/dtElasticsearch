@@ -100,7 +100,7 @@ class BulkProcessor:
         headers['Content-Type'] = 'application/x-ndjson'
         url = self.root_url + "/_bulk"
         if self.pipeline:
-            url = url + f"?={self.pipeline}"
+            url = url + f"?pipeline={self.pipeline}"
         r = self.request_session.post(url, data=self.entries, headers=headers)
         if r.status_code >= 400:
             logging.getLogger('elastic').error("Bulk index returned Error Code: {} [{}]".format(str(r.status_code), r.content))
