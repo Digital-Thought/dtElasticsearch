@@ -249,9 +249,9 @@ class ElasticsearchConnection:
             logging.getLogger("elastic").exception()
             return False
 
-    def bulk_processor(self, batch_size=1000, batch_max_size_bytes=5000000):
+    def bulk_processor(self, batch_size=1000, batch_max_size_bytes=5000000, pipeline=None):
         return BulkProcessor(request_session=self.request_session, root_url=self.root_url, batch_size=batch_size,
-                             batch_max_size_bytes=batch_max_size_bytes)
+                             batch_max_size_bytes=batch_max_size_bytes, pipeline=pipeline)
 
     def index_document(self, index, document, _id=None):
         if _id is None:
