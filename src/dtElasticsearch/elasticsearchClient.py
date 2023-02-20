@@ -15,8 +15,9 @@ import base64
 
 class ElasticsearchConnection:
 
-    def __init__(self, server, port, api_key):
+    def __init__(self, server, port, api_key, ssl_verify=True):
         self.api_key = api_key
+        self.ssl_verify = ssl_verify
         self.root_url = 'https://{}:{}/'.format(server, port)
         self.root_directory = str(pathlib.Path(__file__).parent.absolute()) + '/../_resources/elasticsearch'
         self.request_session = self.__request_session(headers={'Authorization': 'ApiKey {}'.format(self.api_key)})
@@ -42,6 +43,7 @@ class ElasticsearchConnection:
         base_headers = {'User-Agent': user_agent}
         base_headers.update(headers)
         request_session = requests.Session()
+        request_session.verify = self.ssl_verify
         request_session.timeout = timeout
 
         request_session.headers.update(base_headers)
