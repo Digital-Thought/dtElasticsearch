@@ -11,6 +11,7 @@ from .scrollQuery import ScrollQuery
 from elasticsearch import Elasticsearch
 
 import base64
+import warnings
 
 
 class ElasticsearchConnection:
@@ -18,6 +19,10 @@ class ElasticsearchConnection:
     def __init__(self, server, port, api_key, ssl_verify=True):
         self.api_key = api_key
         self.ssl_verify = ssl_verify
+
+        if not self.ssl_verify:
+            warnings.filterwarnings('ignore', message='Unverified HTTPS request')
+
         self.root_url = 'https://{}:{}/'.format(server, port)
         self.root_directory = str(pathlib.Path(__file__).parent.absolute()) + '/../_resources/elasticsearch'
         self.request_session = self.__request_session(headers={'Authorization': 'ApiKey {}'.format(self.api_key)})
