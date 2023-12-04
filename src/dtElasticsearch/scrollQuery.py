@@ -8,7 +8,7 @@ class ScrollQuery:
 
     def close(self):
         body = {"scroll_id": self.scroll_ids}
-        r = self.request_session.delete(self.root_url + "_search/scroll", json=body)
+        r = self.request_session.delete(self.root_url() + "_search/scroll", json=body)
         self.scroll_ids.clear()
 
     def clear(self):
@@ -18,7 +18,7 @@ class ScrollQuery:
         scroll = "1m"
         body = query
 
-        r = self.request_session.post(self.root_url + index + "/_search?scroll=1m", json=body)
+        r = self.request_session.post(self.root_url() + index + "/_search?scroll=1m", json=body)
 
         scroll_id = r.json()['_scroll_id']
         self.scroll_ids.append(scroll_id)
@@ -29,7 +29,7 @@ class ScrollQuery:
             for hit in hits:
                 yield hit
 
-            r = self.request_session.post(self.root_url + "_search/scroll", json=scroll_query)
+            r = self.request_session.post(self.root_url() + "_search/scroll", json=scroll_query)
             hits = r.json()['hits']['hits']
 
     def __enter__(self):

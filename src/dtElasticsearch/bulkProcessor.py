@@ -39,7 +39,7 @@ class BulkProcessorListener:
 
 class BulkProcessor:
 
-    def __init__(self, request_session, root_url, batch_size, batch_max_size_bytes, pipeline=None) -> None:
+    def __init__(self, request_session, batch_size, batch_max_size_bytes, pipeline=None, root_url=None) -> None:
         super().__init__()
         self.request_session = request_session
         self.pipeline = pipeline
@@ -98,7 +98,7 @@ class BulkProcessor:
         logging.getLogger('elastic').info("Processing Bulk Index Batch. Size: {}".format(str(self.current_batch_size)))
         headers = self.request_session.headers
         headers['Content-Type'] = 'application/x-ndjson'
-        url = self.root_url + "/_bulk"
+        url = self.root_url() + "/_bulk"
         if self.pipeline:
             url = url + f"?pipeline={self.pipeline}"
         r = self.request_session.post(url, data=self.entries, headers=headers)

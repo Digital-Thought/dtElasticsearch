@@ -12,25 +12,26 @@ from elasticsearch import Elasticsearch
 
 import base64
 import warnings
+import random
 
 
 class ElasticsearchConnection:
 
-    def __init__(self, server, port, api_key, ssl_verify=True):
+    def __init__(self, hosts, api_key, ssl_verify=True):
         self.api_key = api_key
         self.ssl_verify = ssl_verify
+        self.hosts = hosts
 
         if not self.ssl_verify:
             warnings.filterwarnings('ignore', message='Unverified HTTPS request')
 
-        self.root_url = 'https://{}:{}/'.format(server, port)
         self.root_directory = str(pathlib.Path(__file__).parent.absolute()) + '/../_resources/elasticsearch'
         self.request_session = self.__request_session(headers={'Authorization': 'ApiKey {}'.format(self.api_key)})
         self.api_key_id = base64.b64decode(api_key.encode(encoding='utf-8')).decode("utf-8").split(':')[0]
         self.api_key_instance = base64.b64decode(api_key.encode(encoding='utf-8')).decode("utf-8").split(':')[1]
-        self.elasticsearch_client = Elasticsearch('https://{}:{}/'.format(server, port), api_key=self.api_key)
+        self.elasticsearch_client = Elasticsearch(self.hosts, api_key=self.api_key)
 
-        response = self.request_session.get(self.root_url)
+        response = self.request_session.get(self.root_url())
         if response.status_code != 200 or not self.is_cluster_healthy():
             raise Exception(
                 "Failed to connect to Elasticsearch server or cluster status is not healthy: {}".format(self.root_url))
@@ -39,6 +40,16 @@ class ElasticsearchConnection:
 
     def __enter__(self):
         return self
+
+    def root_url(self):
+        if isinstance(self.hosts, str):
+            nodes = self.hosts.split(",")
+        else:
+            nodes = self.hosts
+        url = nodes[random.choice([0, len(nodes)-1])]
+        if not url.endswith('/'):
+            return url + '/'
+        return url
 
     def __request_session(self, retries=3, backoff_factor=0.3, status_forcelist=(400, 500, 502, 504), timeout=60,
                           user_agent='Mozilla/5.0 (Windows NT 10.0; rv:78.0) Gecko/20100101 Firefox/78.0',
@@ -81,7 +92,7 @@ class ElasticsearchConnection:
         return self.elasticsearch_client
 
     def flush_index(self, index: str) -> dict:
-        return self.request_session.post(self.root_url + index + '/_flush').json()
+        return self.request_session.post(self.root_url() + index + '/_flush').json()
 
     def delete_by_id(self, index: str, _id: str):
         return self.elasticsearch_client.delete(index=index, id=_id)
@@ -95,7 +106,7 @@ class ElasticsearchConnection:
                 template['_meta'] = {'description': description, 'version': version, 'requires_prefix': requires_prefix}
 
             logging.getLogger('elastic').info('Creating Component Template: {}'.format(template_name))
-            resp = self.request_session.put(self.root_url + '_component_template/' + template_name,
+            resp = self.request_session.put(self.root_url() + '_component_template/' + template_name,
                                             json=template).json()
             if not resp['acknowledged']:
                 logging.getLogger('elastic').error(
@@ -115,7 +126,7 @@ class ElasticsearchConnection:
                 policy['_meta'] = {'description': description, 'version': version, 'requires_prefix': requires_prefix}
 
             logging.getLogger('elastic').info('Creating Lifecycle Policy: {}'.format(policy_name))
-            resp = self.request_session.put(self.root_url + '_ilm/policy/' + policy_name, json=policy).json()
+            resp = self.request_session.put(self.root_url() + '_ilm/policy/' + policy_name, json=policy).json()
             if not resp['acknowledged']:
                 logging.getLogger('elastic').error(
                     'Failed to create ILM Policy {}.  Error: {}'.format(policy_name, str(resp)))
@@ -177,7 +188,7 @@ class ElasticsearchConnection:
 
                 self.install_lifecycle_policy(required_lcp, self.default_lifecycle_policies()[required_lcp])
 
-            resp = self.request_session.put(self.root_url + '_index_template/' + template_name, json=template).json()
+            resp = self.request_session.put(self.root_url() + '_index_template/' + template_name, json=template).json()
             if not resp['acknowledged']:
                 logging.getLogger('elastic').error(
                     'Failed to create Template {}.  Error: {}'.format(template_name, str(resp)))
@@ -186,7 +197,7 @@ class ElasticsearchConnection:
             alias_name = template['template']['settings']['index.lifecycle.rollover_alias']
             create_index_json = {'aliases': {alias_name: {'is_write_index': True}}}
             logging.getLogger('elastic').info('Creating Initial Index for Template: {}'.format(template_name))
-            resp = self.request_session.put(self.root_url + template_name + '-000001', json=create_index_json)
+            resp = self.request_session.put(self.root_url() + template_name + '-000001', json=create_index_json)
             logging.getLogger('elastic').info(resp.content)
 
             return {'status': 'created'}
@@ -225,24 +236,24 @@ class ElasticsearchConnection:
 
     def loaded_component_templates(self):
         component_templates = []
-        for c_temp in self.request_session.get(self.root_url + '_component_template').json()['component_templates']:
+        for c_temp in self.request_session.get(self.root_url() + '_component_template').json()['component_templates']:
             component_templates.append(c_temp['name'])
         return component_templates
 
     def loaded_index_templates(self):
         index_templates = []
-        for i_temp in self.request_session.get(self.root_url + '_index_template').json()['index_templates']:
+        for i_temp in self.request_session.get(self.root_url() + '_index_template').json()['index_templates']:
             index_templates.append(i_temp['name'])
         return index_templates
 
     def loaded_lifecycle_policies(self):
         lifecycle_policies = []
-        for lc_temp in self.request_session.get(self.root_url + '_ilm/policy').json():
+        for lc_temp in self.request_session.get(self.root_url() + '_ilm/policy').json():
             lifecycle_policies.append(lc_temp)
         return lifecycle_policies
 
     def get_cluster_health(self):
-        return self.request_session.get(self.root_url + '_cluster/health').json()
+        return self.request_session.get(self.root_url() + '_cluster/health').json()
 
     def is_cluster_healthy(self):
         try:
@@ -252,18 +263,17 @@ class ElasticsearchConnection:
                     "Cluster is healthy.  However, it is in a YELLOW state. Recommend a check of the cluster.")
             return json['status'] != 'red'
         except Exception as ex:
-            logging.getLogger('elastic').exception()
-            logging.getLogger("elastic").exception()
+            logging.getLogger('elastic').exception(str(ex))
             return False
 
     def bulk_processor(self, batch_size=1000, batch_max_size_bytes=5000000, pipeline=None):
-        return BulkProcessor(request_session=self.request_session, root_url=self.root_url, batch_size=batch_size,
-                             batch_max_size_bytes=batch_max_size_bytes, pipeline=pipeline)
+        return BulkProcessor(request_session=self.request_session, batch_size=batch_size,
+                             batch_max_size_bytes=batch_max_size_bytes, pipeline=pipeline, root_url=self.root_url)
 
     def index_document(self, index, document, _id=None):
         if _id is None:
             _id = ''
-        index_url = self.root_url + '{}/_doc/{}'.format(index, _id)
+        index_url = self.root_url() + '{}/_doc/{}'.format(index, _id)
         response = self.request_session.post(index_url, json=document)
 
         index_resp = {'status_code': response.status_code, 'elastic': response.json()}
@@ -271,7 +281,7 @@ class ElasticsearchConnection:
 
     def find_by_term(self, index, term, value):
         query = {'query': {'terms': {term: value}}}
-        response = self.request_session.get(self.root_url + '{}/_search'.format(index), json=query)
+        response = self.request_session.get(self.root_url() + '{}/_search'.format(index), json=query)
         search_resp = {'status_code': response.status_code, 'elastic': response.json()}
         return search_resp
 
@@ -280,7 +290,7 @@ class ElasticsearchConnection:
             return self.request_session.get('{}{}/_doc/{}'.format(self.root_url, index, _id)).json()
         else:
             query = {"query": {"bool": {"filter": {"term": {"_id": _id}}}}}
-            response = self.request_session.get(self.root_url + '{}/_search'.format(index), json=query).json()
+            response = self.request_session.get(self.root_url() + '{}/_search'.format(index), json=query).json()
             if response['hits']['total']['value'] > 1:
                 raise Exception(
                     f'ID: {_id} has returned {response["hits"]["total"]["value"]} result.  Expected only 1 or 0 entries.')
@@ -301,7 +311,7 @@ class ElasticsearchConnection:
         return []
 
     def raw_aggregation(self, index, query):
-        response = self.request_session.get(self.root_url + '{}/_search'.format(index), json=query)
+        response = self.request_session.get(self.root_url() + '{}/_search'.format(index), json=query)
         if response.status_code != 200:
             raise Exception(response.text)
 
