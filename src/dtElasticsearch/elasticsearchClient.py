@@ -22,6 +22,7 @@ class ElasticsearchConnection:
         self.ssl_verify = ssl_verify
         self.hosts = hosts
         self.last_host = None
+        self.host_index = 0
 
         if not self.ssl_verify:
             warnings.filterwarnings('ignore', message='Unverified HTTPS request')
@@ -47,11 +48,10 @@ class ElasticsearchConnection:
             nodes = self.hosts.split(",")
         else:
             nodes = self.hosts
-        while True:
-            url = nodes[random.choice([0, len(nodes)-1])]
-            if self.last_host is None or self.last_host != url:
-                self.last_host = url
-                break
+        url = nodes[self.host_index]
+        self.host_index += 1
+        if self.host_index == len(nodes):
+            self.host_index = 0
 
         if not url.endswith('/'):
             return url + '/'
