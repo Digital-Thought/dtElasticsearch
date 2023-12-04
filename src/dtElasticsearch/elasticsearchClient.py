@@ -54,7 +54,9 @@ class ElasticsearchConnection:
             self.host_index = 0
 
         if not url.endswith('/'):
-            return url + '/'
+            url = url + '/'
+
+        self.last_host = url
         return url
 
     def __request_session(self, retries=3, backoff_factor=0.3, status_forcelist=(400, 500, 502, 504), timeout=60,
