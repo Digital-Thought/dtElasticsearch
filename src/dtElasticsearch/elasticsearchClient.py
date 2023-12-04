@@ -21,6 +21,7 @@ class ElasticsearchConnection:
         self.api_key = api_key
         self.ssl_verify = ssl_verify
         self.hosts = hosts
+        self.last_host = None
 
         if not self.ssl_verify:
             warnings.filterwarnings('ignore', message='Unverified HTTPS request')
@@ -34,9 +35,9 @@ class ElasticsearchConnection:
         response = self.request_session.get(self.root_url())
         if response.status_code != 200 or not self.is_cluster_healthy():
             raise Exception(
-                "Failed to connect to Elasticsearch server or cluster status is not healthy: {}".format(self.root_url))
+                "Failed to connect to Elasticsearch server or cluster status is not healthy: {}".format(self.last_host))
 
-        logging.getLogger('elastic').info("Successfully connected to: {}".format(self.root_url))
+        logging.getLogger('elastic').info("Successfully connected to: {}".format(self.last_host))
 
     def __enter__(self):
         return self
@@ -46,7 +47,12 @@ class ElasticsearchConnection:
             nodes = self.hosts.split(",")
         else:
             nodes = self.hosts
-        url = nodes[random.choice([0, len(nodes)-1])]
+        while True:
+            url = nodes[random.choice([0, len(nodes)-1])]
+            if self.last_host is None or self.last_host != url:
+                self.last_host = url
+                break
+
         if not url.endswith('/'):
             return url + '/'
         return url
