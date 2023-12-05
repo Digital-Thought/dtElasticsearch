@@ -9,6 +9,7 @@ from requests.adapters import HTTPAdapter
 from .bulkProcessor import BulkProcessor
 from .scrollQuery import ScrollQuery
 from elasticsearch import Elasticsearch
+from ._version import _VERSION, _TITLE
 
 import base64
 import warnings
@@ -49,21 +50,24 @@ class ElasticsearchConnection:
         else:
             nodes = self.hosts
         while True:
-            url = nodes[random.randint(0, len(nodes)-1)]
-            if self.last_host is None or self.last_host != url:
-                self.last_host = url
-                break
+            url = nodes[random.randint(0, len(nodes) - 1)]
+            if self.last_host is None or self.last_host != url:  # Make sure the selected Node was not the last one used.
+                response = self.request_session.get(url)
+                if response.status_code == 200:  # Confirm the chose Node is alive and able to accept requests.
+                    self.last_host = url
+                    break
 
         if not url.endswith('/'):
             return url + '/'
         return url
 
     def __request_session(self, retries=3, backoff_factor=0.3, status_forcelist=(400, 500, 502, 504), timeout=60,
-                          user_agent='Mozilla/5.0 (Windows NT 10.0; rv:78.0) Gecko/20100101 Firefox/78.0',
                           headers=None, proxy=None):
+
+        user_agent = f'Python-requests/{requests.__version__} ({_TITLE}, {_VERSION})'
         if headers is None:
             headers = {}
-        base_headers = {'User-Agent': user_agent}
+        base_headers = {'User-Agent': user_agent, 'X-dt-client-origin': f'{_TITLE}-{_VERSION}'}
         base_headers.update(headers)
         request_session = requests.Session()
         request_session.verify = self.ssl_verify
